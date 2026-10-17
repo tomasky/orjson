@@ -1,5 +1,5 @@
 import {
-  "username/orjson",
+  "kupas/orjson",
 }
 
 pkgtype(kind: "executable")

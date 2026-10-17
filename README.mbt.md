@@ -1,4 +1,4 @@
-# username/orjson
+# kupas/orjson
 
 MoonBit bindings for [yyjson](https://github.com/ibireme/yyjson), the C JSON
 engine vendored by [orjson](https://github.com/ijl/orjson). Parsing and
