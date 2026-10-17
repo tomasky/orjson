@@ -1,0 +1,5 @@
+import {
+  "username/orjson",
+}
+
+pkgtype(kind: "executable")

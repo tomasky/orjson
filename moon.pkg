@@ -1,0 +1,3 @@
+options(
+  "native-stub": [ "c/bridge.c", "c/yyjson_impl.c" ],
+)
