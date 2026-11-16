@@ -43,6 +43,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asan"
           printf '#!/bin/sh\nexec cc -fsanitize=address -fno-omit-frame-pointer "$@"\n' > "$RUNNER_TEMP/asan/cc"
           chmod +x "$RUNNER_TEMP/asan/cc"
+          # moon resolves the archiver as dirname(MOON_CC)/ar — provide it
+          ln -sf "$(command -v ar)" "$RUNNER_TEMP/asan/ar"
+          ln -sf "$(command -v ranlib)" "$RUNNER_TEMP/asan/ranlib"
           export MOON_CC="$RUNNER_TEMP/asan/cc"
           export ASAN_OPTIONS=detect_leaks=1
           for mode in --debug --release; do
@@ -70,6 +73,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ubsan"
           printf '#!/bin/sh\nexec cc -fsanitize=undefined,signed-integer-overflow,shift,integer-divide-by-zero -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-wrapv "$@"\n' > "$RUNNER_TEMP/ubsan/cc"
           chmod +x "$RUNNER_TEMP/ubsan/cc"
+          ln -sf "$(command -v ar)" "$RUNNER_TEMP/ubsan/ar"
+          ln -sf "$(command -v ranlib)" "$RUNNER_TEMP/ubsan/ranlib"
           export MOON_CC="$RUNNER_TEMP/ubsan/cc"
           export UBSAN_OPTIONS=print_stacktrace=1
           for mode in --debug --release; do
