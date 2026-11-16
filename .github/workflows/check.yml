@@ -59,6 +59,34 @@ jobs:
             done
           done
 
+      # Undefined-behaviour pass. MoonBit compiles the native stub with
+      # `-fwrapv`, which makes gcc skip signed-overflow checks entirely, so
+      # `-fno-wrapv` is required to actually get them. `-fsanitize=undefined`
+      # alone does not enable signed-integer-overflow in this gcc, so it is
+      # listed explicitly. Optimised builds matter most here: UB such as
+      # out-of-bounds reads after inlining only shows up under -O2.
+      - name: ubsan check (native stub)
+        run: |
+          mkdir -p "$RUNNER_TEMP/ubsan"
+          printf '#!/bin/sh\nexec cc -fsanitize=undefined,signed-integer-overflow,shift,integer-divide-by-zero -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-wrapv "$@"\n' > "$RUNNER_TEMP/ubsan/cc"
+          chmod +x "$RUNNER_TEMP/ubsan/cc"
+          export MOON_CC="$RUNNER_TEMP/ubsan/cc"
+          export UBSAN_OPTIONS=print_stacktrace=1
+          for mode in --debug --release; do
+            moon test --target native "$mode" --no-render
+            for exe in $(find _build/native -path "*/test/*" -name "*.exe"); do
+              for spec in orjson_test.mbt orjson_diff_test.mbt orjson_err_diff_test.mbt orjson_stress_wbtest.mbt; do
+                out=$("$exe" "$spec:0-5000" 2>&1) || {
+                  echo "::error::$exe failed on $spec"; echo "$out" | tail -40; exit 1;
+                }
+                if echo "$out" | grep -q 'runtime error'; then
+                  echo "::error::undefined behaviour reported by $exe on $spec"
+                  echo "$out" | grep -A10 'runtime error' | head -40; exit 1;
+                fi
+              done
+            done
+          done
+
       - name: moon fmt
         run: |
           moon fmt
