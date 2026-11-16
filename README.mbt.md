@@ -89,5 +89,5 @@ test {
 
 | Version | Notes |
 | --- | --- |
-| 0.2.0 | Aligned with orjson 3.13.0 (yyjson 0.12.0 fork, `vendor/` byte-identical to upstream); hardened bridge null/error handling; node tags are named constants. |
+| 0.2.0 | Aligned with orjson 3.13.0 (yyjson 0.12.0 fork, `vendor/` byte-identical to upstream); hardened bridge null/error handling; node tags are named constants; encode-error message state is thread-local (verified with ThreadSanitizer, see `c/tsan_race_driver.c`). |
 | 0.1.1 | Initial release. |

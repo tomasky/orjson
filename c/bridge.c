@@ -76,8 +76,15 @@ typedef struct mb_orjson_node {
 #define MB_ERR_OOM "failed to allocate memory"
 #define MB_ERR_RECURSION "Recursion limit reached"
 
-/* Message of the most recent encode-tree building failure. */
-static const char *mb_orjson_build_err = MB_ERR_OOM;
+/* Message of the most recent encode-tree building failure.
+ *
+ * This is written by one FFI call (e.g. a failed `mb_orjson_array_push`) and
+ * read back by a later `mb_orjson_build_error()` call, so it must be
+ * thread-local: with a plain global, two threads serializing concurrently
+ * could observe each other's failure message (verified with
+ * ThreadSanitizer before this was fixed). It only ever points at string
+ * literals, so thread-local storage costs nothing to clean up. */
+static _Thread_local const char *mb_orjson_build_err = MB_ERR_OOM;
 
 static void *mb_fail(const char *msg) {
   mb_orjson_build_err = msg;
