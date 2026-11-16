@@ -84,15 +84,42 @@ fn decode(handle : ParseHandle) -> Json raise JsonError {
 }
 
 ///|
+/// Node type tags. These must stay in sync with the `MB_ORJSON_*` enum in
+/// `c/bridge.c`; `MB_ORJSON_RAW` (6) never comes out of a parse, so parsed
+/// documents only ever see tags 0-8 except 6.
+const NODE_NULL : Int32 = 0
+
+///|
+const NODE_BOOL : Int32 = 1
+
+///|
+const NODE_INT : Int32 = 2
+
+///|
+const NODE_UINT : Int32 = 3
+
+///|
+const NODE_FLOAT : Int32 = 4
+
+///|
+const NODE_STRING : Int32 = 5
+
+///|
+const NODE_ARRAY : Int32 = 7
+
+///|
+const NODE_OBJECT : Int32 = 8
+
+///|
 fn convert(node : Node) -> Json {
   match node_type(node) {
-    0 => Json::Null
-    1 => Json::Bool(node_bool(node) != 0)
-    2 => Json::Int(node_int(node))
-    3 => Json::UInt(node_uint(node))
-    4 => Json::Float(node_float(node))
-    5 => Json::String(node_string(node))
-    7 => {
+    NODE_NULL => Json::Null
+    NODE_BOOL => Json::Bool(node_bool(node) != 0)
+    NODE_INT => Json::Int(node_int(node))
+    NODE_UINT => Json::UInt(node_uint(node))
+    NODE_FLOAT => Json::Float(node_float(node))
+    NODE_STRING => Json::String(node_string(node))
+    NODE_ARRAY => {
       let size = node_size(node)
       let items : Array[Json] = []
       for i = 0; i < size; i = i + 1 {
@@ -100,7 +127,7 @@ fn convert(node : Node) -> Json {
       }
       Json::Array(items)
     }
-    8 => {
+    NODE_OBJECT => {
       let size = node_size(node)
       let map : Map[String, Json] = Map([])
       for i = 0; i < size; i = i + 1 {
@@ -108,6 +135,7 @@ fn convert(node : Node) -> Json {
       }
       Json::Object(map)
     }
+    // `MB_ORJSON_RAW` and any unknown tag: yyjson never produces them here.
     _ => Json::Null
   }
 }

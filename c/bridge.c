@@ -461,8 +461,18 @@ static mb_orjson_parse_result *mb_parse_impl(const char *data, size_t len) {
   return res;
 }
 
+/* `input` is borrowed for the duration of the call only; every string kept in
+ * the resulting tree is owned by the yyjson document (see `mb_parse_impl`), and
+ * `mb_parse_impl` never writes through `data`. */
 MOONBIT_EXPORT void *mb_orjson_parse_bytes(moonbit_bytes_t input) {
   int32_t len = Moonbit_array_length((void *)input);
+  if (len < 0) {
+    mb_orjson_parse_result *res =
+        (mb_orjson_parse_result *)calloc(1, sizeof(*res));
+    if (!res) return NULL;
+    res->err = mb_strdup(MB_ERR_OOM);
+    return res;
+  }
   return mb_parse_impl((const char *)input, (size_t)len);
 }
 
@@ -519,33 +529,39 @@ MOONBIT_EXPORT void mb_orjson_parse_free(void *handle) {
  * Node accessors (parse -> MoonBit)
  *==========================================================================*/
 
+/* The accessors below are only ever called for a node whose type has already
+ * been read through `mb_orjson_node_type()`, but a NULL node is handled anyway
+ * so that a malformed handle degrades to a default value instead of crashing
+ * (mirroring the bounds checks in the container accessors). */
 MOONBIT_EXPORT int64_t mb_orjson_node_type(void *node) {
-  return ((mb_orjson_node *)node)->type;
+  return node ? ((mb_orjson_node *)node)->type : MB_ORJSON_NULL;
 }
 
 MOONBIT_EXPORT int64_t mb_orjson_node_bool(void *node) {
-  return ((mb_orjson_node *)node)->u.boolean;
+  return node ? ((mb_orjson_node *)node)->u.boolean : 0;
 }
 
 MOONBIT_EXPORT int64_t mb_orjson_node_int(void *node) {
-  return ((mb_orjson_node *)node)->u.i64;
+  return node ? ((mb_orjson_node *)node)->u.i64 : 0;
 }
 
 MOONBIT_EXPORT uint64_t mb_orjson_node_uint(void *node) {
-  return ((mb_orjson_node *)node)->u.u64;
+  return node ? ((mb_orjson_node *)node)->u.u64 : 0;
 }
 
 MOONBIT_EXPORT double mb_orjson_node_float(void *node) {
-  return ((mb_orjson_node *)node)->u.f64;
+  return node ? ((mb_orjson_node *)node)->u.f64 : 0.0;
 }
 
 MOONBIT_EXPORT moonbit_string_t mb_orjson_node_string(void *node) {
   mb_orjson_node *n = (mb_orjson_node *)node;
+  if (!n) return moonbit_make_string_raw(0);
   return mb_mb_string_from_utf8(n->u.str.ptr, n->u.str.len);
 }
 
 MOONBIT_EXPORT int64_t mb_orjson_node_size(void *node) {
   mb_orjson_node *n = (mb_orjson_node *)node;
+  if (!n) return 0;
   if (n->type == MB_ORJSON_ARRAY) return (int64_t)n->u.arr.len;
   if (n->type == MB_ORJSON_OBJECT) return (int64_t)n->u.obj.len;
   return 0;
@@ -553,6 +569,7 @@ MOONBIT_EXPORT int64_t mb_orjson_node_size(void *node) {
 
 MOONBIT_EXPORT void *mb_orjson_node_array_get(void *node, int64_t index) {
   mb_orjson_node *n = (mb_orjson_node *)node;
+  if (!n || n->type != MB_ORJSON_ARRAY) return NULL;
   if (index < 0 || (size_t)index >= n->u.arr.len) return NULL;
   return n->u.arr.items[index];
 }
@@ -560,6 +577,9 @@ MOONBIT_EXPORT void *mb_orjson_node_array_get(void *node, int64_t index) {
 MOONBIT_EXPORT moonbit_string_t mb_orjson_node_object_key(void *node,
                                                           int64_t index) {
   mb_orjson_node *n = (mb_orjson_node *)node;
+  if (!n || n->type != MB_ORJSON_OBJECT) {
+    return moonbit_make_string_raw(0);
+  }
   if (index < 0 || (size_t)index >= n->u.obj.len) {
     return moonbit_make_string_raw(0);
   }
@@ -569,6 +589,7 @@ MOONBIT_EXPORT moonbit_string_t mb_orjson_node_object_key(void *node,
 
 MOONBIT_EXPORT void *mb_orjson_node_object_get(void *node, int64_t index) {
   mb_orjson_node *n = (mb_orjson_node *)node;
+  if (!n || n->type != MB_ORJSON_OBJECT) return NULL;
   if (index < 0 || (size_t)index >= n->u.obj.len) return NULL;
   return n->u.obj.vals[index];
 }
@@ -877,18 +898,29 @@ static size_t mb_reformat_double(const char *s, char *out) {
 }
 
 /* Format a double the way orjson/zmij does. NaN and infinities serialize as
- * `null` (matching orjson). */
+ * `null` (matching orjson).
+ *
+ * `yyjson_write_number()` gives the shortest round-trip digits; the digits and
+ * exponent are then re-laid-out the way orjson's `zmij` writer does, so only
+ * the layout (fixed vs scientific, exponent sign, `.0` suffix) differs. */
 static void mb_write_double(mb_sbuf *b, double v) {
-  if (isnan(v) || isinf(v)) {
+  if (isnan(v)) {
+    mb_sbuf_puts(b, "null");
+    return;
+  }
+  if (isinf(v)) {
     mb_sbuf_puts(b, "null");
     return;
   }
   char tmp[64];
+  char buf[64];
   yyjson_val val;
   val.tag = YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL;
   val.uni.f64 = v;
-  char buf[64];
-  yyjson_write_number(&val, buf);
+  if (!yyjson_write_number(&val, buf)) {
+    b->status = 1;
+    return;
+  }
   size_t len = mb_reformat_double(buf, tmp);
   mb_sbuf_put(b, tmp, len);
 }

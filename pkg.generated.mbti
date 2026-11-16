@@ -8,11 +8,11 @@ pub fn parse_bytes(Bytes) -> Json raise JsonError
 
 pub fn stringify(Json) -> String raise JsonError
 
-pub fn stringify_with(Json, indent? : Int, sort_keys? : Bool, append_newline? : Bool) -> String raise JsonError
+pub fn stringify_with(Json, indent? : Int32, sort_keys? : Bool, append_newline? : Bool) -> String raise JsonError
 
 // Errors
 pub(all) suberror JsonError {
-  DecodeError(String, Int)
+  DecodeError(String, Int32)
   EncodeError(String)
 }
 

@@ -83,4 +83,11 @@ test {
 - `c/yyjson_impl.c`, `c/yyjson_conf.h` — compile the vendored yyjson with
   orjson-compatible settings.
 - `vendor/yyjson/` — yyjson as vendored and modified by orjson (MIT; see
-  `vendor/README.md` and the license files under `vendor/`).
+  `vendor/yyjson/README.md` and the license files under `vendor/`).
+
+## Versioning
+
+| Version | Notes |
+| --- | --- |
+| 0.2.0 | Aligned with orjson 3.13.0 (yyjson 0.12.0 fork, `vendor/` byte-identical to upstream); hardened bridge null/error handling; node tags are named constants. |
+| 0.1.1 | Initial release. |
