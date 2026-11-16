@@ -33,6 +33,32 @@ jobs:
           moon info
           git diff --exit-code
 
+      # The FFI boundary is the one part the tests cannot observe: every
+      # malloc'd handle/tree must be freed by MoonBit, and parse trees keep
+      # strings pointing into the yyjson document. Build the native stub with
+      # AddressSanitizer + LeakSanitizer to check ownership in both the debug
+      # and release code paths.
+      - name: asan/leak check (native stub)
+        run: |
+          mkdir -p "$RUNNER_TEMP/asan"
+          printf '#!/bin/sh\nexec cc -fsanitize=address -fno-omit-frame-pointer "$@"\n' > "$RUNNER_TEMP/asan/cc"
+          chmod +x "$RUNNER_TEMP/asan/cc"
+          export MOON_CC="$RUNNER_TEMP/asan/cc"
+          export ASAN_OPTIONS=detect_leaks=1
+          for mode in --debug --release; do
+            moon test --target native "$mode" --no-render
+            for exe in $(find _build/native -path "*/test/*" -name "*.exe"); do
+              for spec in orjson_test.mbt orjson_diff_test.mbt orjson_err_diff_test.mbt orjson_stress_wbtest.mbt; do
+                out=$("$exe" "$spec:0-5000" 2>&1) || {
+                  echo "::error::$exe failed on $spec"; echo "$out" | tail -40; exit 1;
+                }
+                if echo "$out" | grep -qE 'LeakSanitizer|AddressSanitizer:'; then
+                  echo "::error::sanitizer report from $exe on $spec"; echo "$out" | tail -60; exit 1;
+                fi
+              done
+            done
+          done
+
       - name: moon fmt
         run: |
           moon fmt
